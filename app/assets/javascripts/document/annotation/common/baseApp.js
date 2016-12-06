@@ -16,9 +16,9 @@ define([
         preselected;
 
     this.header.incrementAnnotationCount(annotations.length);
-    // var startTime = new Date().getTime();
+    var startTime = new Date().getTime();
     this.highlighter.initPage(annotations);
-    // console.log('took ' + (new Date().getTime() - startTime) + 'ms');
+    console.log('took ' + (new Date().getTime() - startTime) + 'ms');
 
     if (urlHash) {
       preselected = this.highlighter.findById(urlHash);
