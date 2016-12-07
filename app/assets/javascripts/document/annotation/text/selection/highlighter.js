@@ -17,18 +17,20 @@ define([
                   runningOffset += jQuery(node).text().length;
                 });
                 return runningOffset;
-              })();
+              })(),
+
+              keepWalking = true;
 
           if (offset > stopOffset)
-            return;
+            return false;
 
           if (node.nodeType === TEXT)
             nodes.push(node);
 
           node = node.firstChild;
 
-          while(node) {
-            walkTextNodes(node, stopOffset, nodes);
+          while(node && keepWalking) {
+            keepWalking = walkTextNodes(node, stopOffset, nodes);
             node = node.nextSibling;
           }
 
