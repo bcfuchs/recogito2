@@ -34,7 +34,7 @@ class StatsAPIController @Inject() (
     import DocumentService._
     
     val fRecentContributions = contributions.getMostRecent(10)
-    // val fContributionStats = contributions.getGlobalStats()
+    val fContributionStats = contributions.getGlobalStats()
     val fTotalAnnotations = annotations.countTotal()
     val fTotalVisits = visits.countTotal()
     val fTotalUsers = users.countUsers()
@@ -42,18 +42,18 @@ class StatsAPIController @Inject() (
     val f = for {
       recentContributions <- fRecentContributions
       recentAffectedDocuments <- documents.findByIds(recentContributions.map(_.affectsItem.documentId))
-      // stats <- fContributionStats
+      stats <- fContributionStats
       annotationCount <- fTotalAnnotations
       visitCount <- fTotalVisits
       userCount <- fTotalUsers
-    } yield (recentContributions, recentAffectedDocuments, /* stats, */ annotationCount, visitCount, userCount)
+    } yield (recentContributions, recentAffectedDocuments, stats, annotationCount, visitCount, userCount)
     
-    f.map { case (recentContributions, recentAffectedDocuments, /* stats, */ annotationCount, visitCount, userCount) =>
+    f.map { case (recentContributions, recentAffectedDocuments, stats, annotationCount, visitCount, userCount) =>
       val response =
         Json.obj(
           "recent_contributions" -> recentContributions,
           "recent_documents" -> recentAffectedDocuments,
-          // "contribution_stats" -> stats,
+          "contribution_stats" -> stats,
           "total_annotations" -> annotationCount,
           "total_visits" -> visitCount,
           "total_users" -> userCount)

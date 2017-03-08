@@ -1,13 +1,14 @@
 package models.contribution
 
-import com.sksamuel.elastic4s.{ HitAs, RichSearchHit, DateHistogramAggregation }
+import com.sksamuel.elastic4s.{ HitAs, RichSearchHit }
 import com.sksamuel.elastic4s.ElasticDsl._
 import com.sksamuel.elastic4s.source.Indexable
 import javax.inject.{ Inject, Singleton }
 import models.{ HasDate, Page }
-import org.elasticsearch.search.aggregations.bucket.filter.Filter
+import org.elasticsearch.search.aggregations.bucket.filter.InternalFilter
 import org.elasticsearch.search.aggregations.bucket.terms.Terms
 import org.elasticsearch.search.aggregations.bucket.nested.Nested
+import org.elasticsearch.search.aggregations.bucket.histogram.{ DateHistogramInterval, InternalHistogram }
 import org.elasticsearch.search.sort.SortOrder
 import org.joda.time.{ DateTime, DateTimeZone }
 import play.api.Logger
@@ -16,7 +17,6 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.language.reflectiveCalls
 import storage.ES
-import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramInterval
 
 @Singleton
 class ContributionService @Inject() (implicit val es: ES, val ctx: ExecutionContext) extends HasDate {
@@ -190,8 +190,7 @@ class ContributionService @Inject() (implicit val es: ES, val ctx: ExecutionCont
   }
 
   /** Returns the system-wide contribution stats **/
-  def getGlobalStats() = ???
-    /**
+  def getGlobalStats(): Future[ContributionStats] =
     es.client execute {
       search in ES.RECOGITO / ES.CONTRIBUTION aggs (
         aggregation terms "by_user" field "made_by",
@@ -204,26 +203,25 @@ class ContributionService @Inject() (implicit val es: ES, val ctx: ExecutionCont
         )
       ) limit 0
     } map { response =>
-      val byUser = response.getAggregations.get("by_user").asInstanceOf[Terms]
-      val byAction = response.getAggregations.get("by_action").asInstanceOf[Terms]
-      val byItemType = response.getAggregations.get("by_item_type").asInstanceOf[Nested]
+      val byUser = response.aggregations.get("by_user").asInstanceOf[Terms]
+      val byAction = response.aggregations.get("by_action").asInstanceOf[Terms]
+      val byItemType = response.aggregations.get("by_item_type").asInstanceOf[Nested]
         .getAggregations.get("item_type").asInstanceOf[Terms]
       
-      val contributionHistory = response.getAggregations.get("contribution_history").asInstanceOf[Filter]
-        .getAggregations.get("last_30_days").asInstanceOf[DateHistogramAggregation]
-
+      val contributionHistory = response.aggregations.get("contribution_history").asInstanceOf[InternalFilter]
+        .getAggregations.get("last_30_days").asInstanceOf[InternalHistogram[InternalHistogram.Bucket]]
+        
       ContributionStats(
         response.getTookInMillis,
         response.getHits.getTotalHits,
         byUser.getBuckets.asScala.map(bucket =>
-          (bucket.getKey, bucket.getDocCount)),
+          (bucket.getKeyAsString, bucket.getDocCount)),
         byAction.getBuckets.asScala.map(bucket =>
           (ContributionAction.withName(bucket.getKeyAsString), bucket.getDocCount)),
         byItemType.getBuckets.asScala.map(bucket =>
           (ItemType.withName(bucket.getKeyAsString), bucket.getDocCount)),
-        contributionHistory..getBuckets.asScala.map(bucket =>
-          (new DateTime(bucket.getKeyAsDate.getMillis, DateTimeZone.UTC), bucket.getDocCount))
-      )
-    }*/
+        contributionHistory.getBuckets.asScala.map(bucket =>
+          (new DateTime(bucket.getKey.asInstanceOf[DateTime].getMillis, DateTimeZone.UTC), bucket.getDocCount)))
+    }
 
 }
