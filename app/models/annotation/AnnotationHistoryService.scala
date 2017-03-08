@@ -12,6 +12,7 @@ import play.api.Logger
 import play.api.libs.json.Json
 import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
+import scala.language.reflectiveCalls
 import storage.ES
 
 trait AnnotationHistoryService extends HasAnnotationIndexing with HasDate { self: AnnotationHistoryService =>
@@ -55,27 +56,31 @@ trait AnnotationHistoryService extends HasAnnotationIndexing with HasDate { self
   def getChangedAfter(docId: String, after: DateTime)(implicit es: ES, context: ExecutionContext): Future[Seq[String]] =
     es.client execute {
       search in ES.RECOGITO / ES.ANNOTATION_HISTORY query {
-        filteredQuery query {
-          nestedQuery("annotates").query(termQuery("annotates.document_id" -> docId))
-        } filter {
-          rangeQuery("last_modified_at").from(formatDate(after))
+        bool {
+          must (
+            nestedQuery("annotates").query(termQuery("annotates.document_id" -> docId))
+          ) filter (
+            rangeQuery("last_modified_at").from(formatDate(after))
+          )
         }
       } aggs {
         aggregation terms "by_annotation_id" field "annotation_id" size ES.MAX_SIZE
       }
     } map { response =>
       response
-        .getAggregations.get("by_annotation_id").asInstanceOf[Terms]
+        .aggregations.get("by_annotation_id").asInstanceOf[Terms]
         .getBuckets.asScala.map(_.getKeyAsString)
     }
 
   def getAnnotationStateAt(annotationId: String, time: DateTime)(implicit es: ES, context: ExecutionContext): Future[Option[AnnotationHistoryRecord]] =
     es.client execute {
       search in ES.RECOGITO / ES.ANNOTATION_HISTORY query {
-        filteredQuery query {
-          termQuery("annotation_id" -> annotationId)
-        } filter {
-          rangeQuery("last_modified_at").lte(formatDate(time))
+        bool {
+          must (
+            termQuery("annotation_id" -> annotationId)
+          ) filter (
+            rangeQuery("last_modified_at").lte(formatDate(time))
+          )
         }
       } sort {
         field sort "last_modified_at" order SortOrder.DESC
@@ -87,10 +92,14 @@ trait AnnotationHistoryService extends HasAnnotationIndexing with HasDate { self
 
     // Retrieves all versions on the document after the the given timestamp
     def findHistoryRecordsAfter() = es.client execute {
-      search in ES.RECOGITO / ES.ANNOTATION_HISTORY query filteredQuery query {
-        nestedQuery("annotates").query(termQuery("annotates.document_id" -> docId))
-      } postFilter { // TODO remove postFilter!
-        rangeQuery("last_modified_at").from(formatDate(after))
+      search in ES.RECOGITO / ES.ANNOTATION_HISTORY query {
+        bool {
+          must (
+            nestedQuery("annotates").query(termQuery("annotates.document_id" -> docId))
+          ) filter (
+            rangeQuery("last_modified_at").from(formatDate(after))
+          )
+        } 
       } limit ES.MAX_SIZE
     } map { _.getHits.getHits }
 

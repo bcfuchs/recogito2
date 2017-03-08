@@ -14,6 +14,7 @@ import play.api.Logger
 import play.api.libs.json.{ JsSuccess, Json }
 import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
+import scala.language.reflectiveCalls
 import storage.ES
 import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogramInterval
 
@@ -129,10 +130,14 @@ class ContributionService @Inject() (implicit val es: ES, val ctx: ExecutionCont
   def deleteHistoryAfter(documentId: String, after: DateTime): Future[Boolean] = {
     
     def findContributionsAfter() = es.client execute {
-      search in ES.RECOGITO / ES.CONTRIBUTION query filteredQuery query {
-        nestedQuery("affects_item").query(termQuery("affects_item.document_id" -> documentId))
-      } postFilter {
-        rangeQuery("made_at").from(formatDate(after)).includeLower(false)
+      search in ES.RECOGITO / ES.CONTRIBUTION query {
+        bool {
+          must (
+            nestedQuery("affects_item").query(termQuery("affects_item.document_id" -> documentId))
+          ) filter (
+            rangeQuery("made_at").from(formatDate(after)).includeLower(false)
+          )
+        }
       } limit ES.MAX_SIZE
     } map { _.getHits.getHits }
 

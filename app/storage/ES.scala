@@ -1,7 +1,7 @@
 package storage
 
 import com.google.inject.AbstractModule
-import com.sksamuel.elastic4s.ElasticClient
+import com.sksamuel.elastic4s.{ ElasticClient, ElasticsearchClientUri }
 import com.sksamuel.elastic4s.ElasticDsl._
 import java.io.File
 import javax.inject.{ Inject, Singleton }
@@ -60,7 +60,7 @@ class ES @Inject() (config: Configuration, lifecycle: ApplicationLifecycle) {
       case None => new File("index")
     }
     
-    val remoteClient = ElasticClient.remote("localhost", 9300)
+    val remoteClient = ElasticClient.transport(ElasticsearchClientUri("localhost", 9300))
     
     // Just fetch cluster stats to see if there's a cluster at all
     Try(
