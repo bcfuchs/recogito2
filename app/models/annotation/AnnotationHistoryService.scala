@@ -15,7 +15,7 @@ import scala.concurrent.{ ExecutionContext, Future }
 import storage.ES
 
 trait AnnotationHistoryService extends HasAnnotationIndexing with HasDate { self: AnnotationHistoryService =>
-  
+
   implicit object AnnotationHistoryRecordIndexable extends Indexable[AnnotationHistoryRecord] {
     override def json(a: AnnotationHistoryRecord): String = Json.stringify(Json.toJson(a))
   }
@@ -37,7 +37,7 @@ trait AnnotationHistoryService extends HasAnnotationIndexing with HasDate { self
       t.printStackTrace
       false
     }
-  
+
   /** Inserts a delete marker for the (now deleted) annotation **/
   def insertDeleteMarker(annotation: Annotation, deletedBy: String, deletedAt: DateTime)(implicit es: ES, context: ExecutionContext): Future[Boolean] =
     es.client execute {
@@ -48,9 +48,9 @@ trait AnnotationHistoryService extends HasAnnotationIndexing with HasDate { self
       Logger.error("Error storing delete marker")
       Logger.error(t.toString)
       t.printStackTrace
-      false    
+      false
     }
-    
+
   /** Returns the IDs of annotations that were changed after the given timestamp **/
   def getChangedAfter(docId: String, after: DateTime)(implicit es: ES, context: ExecutionContext): Future[Seq[String]] =
     es.client execute {
@@ -58,24 +58,24 @@ trait AnnotationHistoryService extends HasAnnotationIndexing with HasDate { self
         filteredQuery query {
           nestedQuery("annotates").query(termQuery("annotates.document_id" -> docId))
         } filter {
-          rangeFilter("last_modified_at").gt(formatDate(after))
+          rangeQuery("last_modified_at").from(formatDate(after))
         }
       } aggs {
-        aggregation terms "by_annotation_id" field "annotation_id" size Int.MaxValue
+        aggregation terms "by_annotation_id" field "annotation_id" size ES.MAX_SIZE
       }
-    } map { response => 
+    } map { response =>
       response
         .getAggregations.get("by_annotation_id").asInstanceOf[Terms]
-        .getBuckets.asScala.map(_.getKey)
+        .getBuckets.asScala.map(_.getKeyAsString)
     }
-    
+
   def getAnnotationStateAt(annotationId: String, time: DateTime)(implicit es: ES, context: ExecutionContext): Future[Option[AnnotationHistoryRecord]] =
     es.client execute {
       search in ES.RECOGITO / ES.ANNOTATION_HISTORY query {
         filteredQuery query {
           termQuery("annotation_id" -> annotationId)
         } filter {
-          rangeFilter("last_modified_at").lte(formatDate(time))
+          rangeQuery("last_modified_at").lte(formatDate(time))
         }
       } sort {
         field sort "last_modified_at" order SortOrder.DESC
@@ -90,7 +90,7 @@ trait AnnotationHistoryService extends HasAnnotationIndexing with HasDate { self
       search in ES.RECOGITO / ES.ANNOTATION_HISTORY query filteredQuery query {
         nestedQuery("annotates").query(termQuery("annotates.document_id" -> docId))
       } postFilter { // TODO remove postFilter!
-        rangeFilter("last_modified_at").gt(formatDate(after))
+        rangeQuery("last_modified_at").from(formatDate(after))
       } limit ES.MAX_SIZE
     } map { _.getHits.getHits }
 
@@ -110,7 +110,7 @@ trait AnnotationHistoryService extends HasAnnotationIndexing with HasDate { self
       }
     }
   }
-  
+
   /** Deletes all history records (versions and delete markers) for a document **/
   def deleteHistoryRecordsByDocId(docId: String)(implicit es: ES, context: ExecutionContext): Future[Boolean] = {
     def findRecords() = es.client execute {
@@ -118,7 +118,7 @@ trait AnnotationHistoryService extends HasAnnotationIndexing with HasDate { self
         nestedQuery("annotates").query(termQuery("annotates.document_id" -> docId))
       } limit ES.MAX_SIZE
     } map { _.getHits.getHits }
-    
+
     findRecords.flatMap { hits =>
       if (hits.size > 0) {
         es.client execute {

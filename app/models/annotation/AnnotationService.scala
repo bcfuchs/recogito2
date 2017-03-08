@@ -95,7 +95,7 @@ class AnnotationService @Inject() (implicit val es: ES, val ctx: ExecutionContex
       get id annotationId.toString from ES.RECOGITO / ES.ANNOTATION
     } map { response =>
       if (response.isExists) {
-        val source = Json.parse(response.getSourceAsString)
+        val source = Json.parse(response.sourceAsString)
         Some((Json.fromJson[Annotation](source).get, response.getVersion))
       } else {
         None
@@ -146,7 +146,7 @@ class AnnotationService @Inject() (implicit val es: ES, val ctx: ExecutionContex
     } map { _.getCount }
 
   /** Retrieves all annotations on a given document **/
-  def findByDocId(id: String, offset: Int= 0, limit: Int = ES.MAX_SIZE): Future[Seq[(Annotation, Long)]] =
+  def findByDocId(id: String, offset: Int = 0, limit: Int = ES.MAX_SIZE): Future[Seq[(Annotation, Long)]] =
     es.client execute {
       search in ES.RECOGITO / ES.ANNOTATION query nestedQuery("annotates").query(termQuery("annotates.document_id" -> id)) start offset limit limit
     } map(_.as[(Annotation, Long)].toSeq)
@@ -180,7 +180,7 @@ class AnnotationService @Inject() (implicit val es: ES, val ctx: ExecutionContex
   }
 
   /** Retrieves all annotations on a given filepart **/
-  def findByFilepartId(id: UUID, limit: Int = Int.MaxValue): Future[Seq[(Annotation, Long)]] =
+  def findByFilepartId(id: UUID, limit: Int = ES.MAX_SIZE): Future[Seq[(Annotation, Long)]] =
     es.client execute {
       search in ES.RECOGITO / ES.ANNOTATION query nestedQuery("annotates").query(termQuery("annotates.filepart_id" -> id.toString)) limit limit
     } map(_.as[(Annotation, Long)].toSeq)
@@ -191,8 +191,8 @@ class AnnotationService @Inject() (implicit val es: ES, val ctx: ExecutionContex
       search in ES.RECOGITO / ES.ANNOTATION query filteredQuery query {
         nestedQuery("annotates").query(termQuery("annotates.document_id" -> documentId))
       } postFilter {
-        rangeFilter("last_modified_at").gt(formatDate(after))
-      } limit Int.MaxValue
+        rangeQuery("last_modified_at").from(formatDate(after))
+      } limit ES.MAX_SIZE
     } map { _.as[(Annotation, Long)].toSeq.map(_._1) }
 
   /** Rolls back the document to the state at the given timestamp **/ 
@@ -271,7 +271,7 @@ class AnnotationService @Inject() (implicit val es: ES, val ctx: ExecutionContex
       val byDocument = response.getAggregations.get("by_document").asInstanceOf[Nested]
         .getAggregations.get("document_id").asInstanceOf[Terms]
       
-      val annotatedDocs = byDocument.getBuckets.asScala.map(_.getKey).toSeq   
+      val annotatedDocs = byDocument.getBuckets.asScala.map(_.getKeyAsString).toSeq   
       val unannotatedDocs = (docIds diff annotatedDocs)
       val docs = 
         if (sortOrder == models.SortOrder.ASC)
