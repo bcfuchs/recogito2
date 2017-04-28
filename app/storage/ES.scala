@@ -60,7 +60,9 @@ class ES @Inject() (config: Configuration, lifecycle: ApplicationLifecycle) {
       case None => new File("index")
     }
     
-    val remoteClient = ElasticClient.transport(ElasticsearchClientUri("localhost", 9300))
+    val remoteClientPort = config.getInt("es.port").get
+    val remoteClientHost  = config.getString("es.host").get;
+    val remoteClient = ElasticClient.transport(ElasticsearchClientUri(remoteClientHost,remoteClientPort))
     
     // Just fetch cluster stats to see if there's a cluster at all
     Try(

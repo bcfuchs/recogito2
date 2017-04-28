@@ -41,6 +41,10 @@ recogito.upload.quota = 200
 # E-Mail encryption key (optional)
 recogito.email.key = "my secret key"
 
+# ElasticSearch configuration
+es.host="localhost"
+es.port=9300
+
 # Database configuration
 # ~~~~~
 # You can declare as many datasources as you want.
